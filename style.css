@@ -1,3 +1,4 @@
+
 /* ベース */
 html, body {
   margin: 0;
@@ -296,3 +297,44 @@ button:focus-visible { outline: 3px solid #5aa9ff; outline-offset: 2px; }
   color: #fff;
   pointer-events: none;
 }
+
+/* ラベルを円のど真ん中に固定配置（この画面だけ） */
+#screen-fvalue-input .aperture-ring { position: relative; }
+#screen-fvalue-input .aperture-value{
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  pointer-events: none;
+}
+
+/* iOS系でピンチmoveを確実に受け取るためのフラグ */
+#screen-fvalue-input .aperture-control{
+  touch-action: none;
+}
+
+/* 内側の塗りつぶし緑円（※もし未追加ならこれを入れてください） */
+#screen-fvalue-input{
+  --f-green:#2e9b57;
+  --circle-scale:0.58;
+}
+#screen-fvalue-input .aperture-ring{
+  border:3px solid var(--f-green) !important;
+  background: transparent !important;
+  box-shadow: 0 6px 16px rgba(0,0,0,.18);
+}
+#screen-fvalue-input .aperture-ring::after{
+  content:"";
+  position:absolute;
+  inset:10%;
+  border-radius:50%;
+  background: var(--f-green);
+  transform: scale(var(--circle-scale, 0.58));
+  transform-origin: 50% 50%;
+  transition: transform .08s linear;
+  will-change: transform;
+}
+
