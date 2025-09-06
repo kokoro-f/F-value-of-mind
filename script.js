@@ -2,11 +2,11 @@
 document.addEventListener('DOMContentLoaded', () => {
   // ====== 画面管理 ======
   const screens = {
-    initial: document.getElementById('screen-initial'),
+    initial:      document.getElementById('screen-initial'),
     introduction: document.getElementById('screen-introduction'),
-    fvalue: document.getElementById('screen-fvalue-input'),
-    bpm: document.getElementById('screen-bpm'),
-    camera: document.getElementById('screen-camera'),
+    fvalue:       document.getElementById('screen-fvalue-input'),
+    bpm:          document.getElementById('screen-bpm'),
+    camera:       document.getElementById('screen-camera'),
   };
   function showScreen(key) {
     Object.values(screens).forEach(s => s?.classList.remove('active'));
@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const video = document.getElementById('video');
   const rawCanvas = document.getElementById('canvas');
 
-  // 実表示キャンバス
+  // 実表示キャンバス（videoの上に重ねる）
   const previewCanvas = document.createElement('canvas');
   const previewCtx = previewCanvas.getContext('2d');
   if (screens.camera) {
@@ -153,7 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await video.play();
       currentStream = stream;
       isFrontCamera = (facingMode === 'user');
-      video.style.display = 'none';
+      video.style.display = 'none'; // 実表示は previewCanvas
       startPreviewLoop();
     } catch (err) {
       console.error('カメラエラー:', err);
@@ -165,68 +165,96 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('initial-next-btn')?.addEventListener('click', () => showScreen('introduction'));
   document.getElementById('intro-next-btn')?.addEventListener('click', () => showScreen('fvalue'));
 
-  // ====== F値（ピンチ） ======
-  const apertureControl = document.querySelector('.aperture-control');
-  const fValueDisplay   = document.getElementById('f-value-display');
-  const apertureInput   = document.getElementById('aperture');
-  const MIN_F = 1.2, MAX_F = 32.0, MIN_SIZE = 100, MAX_SIZE = 250;
+  // ====== F値（ピンチ・スケール制御） ======
+  const fvalueScreen   = document.getElementById('screen-fvalue-input');
+  const apertureControl= document.querySelector('#screen-fvalue-input .aperture-control');
+  const fValueDisplay  = document.getElementById('f-value-display'); // ※画面内のF値表示要素（例：.aperture-value）
+  const apertureInput  = document.getElementById('aperture');        // hidden/numberでもOK
 
-  const fToSize = f => MIN_SIZE + ((MAX_F - f) / (MAX_F - MIN_F)) * (MAX_SIZE - MIN_SIZE);
-  const sizeToF = size => MAX_F - ((size - MIN_SIZE) / (MAX_SIZE - MIN_SIZE)) * (MAX_F - MIN_F);
+  const MIN_F = 1.2, MAX_F = 32.0;
+  const SCALE_MIN = 0.55, SCALE_MAX = 0.95; // CSSと合わせる
 
-  if (apertureControl && fValueDisplay && apertureInput) {
-    const initialSize = fToSize(selectedFValue);
-    apertureControl.style.width = apertureControl.style.height = `${initialSize}px`;
-    fValueDisplay.textContent = selectedFValue.toFixed(1);
-    apertureInput.value = selectedFValue.toFixed(1);
+  // 1/f を0..1に正規化（raw=0→F=MAX、raw=1→F=MIN）
+  const fToRaw = (f) => {
+    const invF = 1 / f;
+    const invMin = 1 / MIN_F, invMax = 1 / MAX_F;
+    return (invF - invMax) / (invMin - invMax);
+  };
+  const rawToF = (raw) => {
+    raw = Math.min(1, Math.max(0, raw));
+    const invMin = 1 / MIN_F, invMax = 1 / MAX_F;
+    const invF = raw * (invMin - invMax) + invMax;
+    return 1 / invF;
+  };
+  const rawToScale = (raw) => SCALE_MIN + (SCALE_MAX - SCALE_MIN) * raw;
+
+  function renderFUiFromRaw(raw) {
+    const f = rawToF(raw);
+    const scale = rawToScale(raw);
+    fvalueScreen?.style.setProperty('--circle-scale', scale.toFixed(4));
+    const labelEl = fValueDisplay || document.querySelector('#screen-fvalue-input .aperture-value');
+    if (labelEl) labelEl.textContent = `F: ${f.toFixed(1)}`;
+    if (apertureInput) apertureInput.value = f.toFixed(1);
   }
 
-  let lastDistance = null;
+  // 初期値反映
+  let raw = fToRaw(selectedFValue);
+  renderFUiFromRaw(raw);
+
+  // ピンチ（距離比で乗算、手触り良く）
+  let pinchStartDist = null;
+  let pinchStartRaw  = null;
   const getDistance = (t1, t2) => Math.hypot(t1.pageX - t2.pageX, t1.pageY - t2.pageY);
 
   document.body.addEventListener('touchstart', e => {
     if (!screens.fvalue?.classList.contains('active')) return;
     if (e.touches.length === 2) {
       e.preventDefault();
-      lastDistance = getDistance(e.touches[0], e.touches[1]);
+      pinchStartDist = getDistance(e.touches[0], e.touches[1]);
+      pinchStartRaw  = raw;
     }
   }, { passive: false });
 
   document.body.addEventListener('touchmove', e => {
     if (!screens.fvalue?.classList.contains('active')) return;
-    if (e.touches.length === 2 && lastDistance) {
+    if (e.touches.length === 2 && pinchStartDist) {
       e.preventDefault();
       const current = getDistance(e.touches[0], e.touches[1]);
-      const delta = current - lastDistance;
-      const newSize = Math.max(MIN_SIZE, Math.min(MAX_SIZE, apertureControl.offsetWidth + delta));
-      const newF = sizeToF(newSize);
-      apertureControl.style.width = apertureControl.style.height = `${newSize}px`;
-      fValueDisplay.textContent = newF.toFixed(1);
-      apertureInput.value = newF.toFixed(1);
-      lastDistance = current;
+      const factor = current / pinchStartDist;
+      let nextRaw = pinchStartRaw * factor;
+      nextRaw = Math.max(0, Math.min(1, nextRaw));
+      raw = nextRaw;
+      renderFUiFromRaw(raw);
     }
   }, { passive: false });
-  document.body.addEventListener('touchend', () => { lastDistance = null; });
+
+  document.body.addEventListener('touchend', () => {
+    pinchStartDist = null;
+    pinchStartRaw  = null;
+  });
+
+  // マウスのホイールでも調整（デバッグ用）
+  apertureControl?.addEventListener('wheel', (e) => {
+    if (!screens.fvalue?.classList.contains('active')) return;
+    e.preventDefault();
+    const delta = -Math.sign(e.deltaY) * 0.03;
+    raw = Math.max(0, Math.min(1, raw + delta));
+    renderFUiFromRaw(raw);
+  }, { passive: false });
 
   // F値決定 → BPM計測へ
   document.getElementById('f-value-decide-btn')?.addEventListener('click', async () => {
-    const f = parseFloat(apertureInput.value);
-    selectedFValue = f;
-    document.querySelector('.aperture-control')?.setAttribute('aria-valuenow', f.toFixed(1));
+    const f = parseFloat(apertureInput?.value ?? `${selectedFValue}`);
+    selectedFValue = isFinite(f) ? f : selectedFValue;
+    document.querySelector('#screen-fvalue-input .aperture-control')?.setAttribute('aria-valuenow', selectedFValue.toFixed(1));
     showScreen('bpm');
     await startBpmCamera();
   });
 
-  // カメラ切替
-  document.getElementById('camera-switch-btn')?.addEventListener('click', async () => {
-    const newMode = isFrontCamera ? 'environment' : 'user';
-    await startCamera(newMode);
-  });
-
   // ====== BPM 計測 ======
-  const bpmVideo = document.getElementById('bpm-video');
+  const bpmVideo  = document.getElementById('bpm-video');
   const bpmCanvas = document.getElementById('bpm-canvas');
-  const bpmCtx = bpmCanvas.getContext('2d');
+  const bpmCtx    = bpmCanvas?.getContext('2d');
   const bpmStatus = document.getElementById('bpm-status');
   let bpmStream = null;
   let bpmLoopId = null;
@@ -281,7 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function measureBpm(durationSec = 15) {
-    if (!bpmVideo) return;
+    if (!bpmVideo || !bpmCanvas || !bpmCtx) return;
     const vals = [];
     const start = performance.now();
     const loop = () => {
@@ -297,7 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
       );
       const frame = bpmCtx.getImageData(0, 0, w, h).data;
       let sum = 0;
-      for (let i = 0; i < frame.length; i += 4) sum += frame[i];
+      for (let i = 0; i < frame.length; i += 4) sum += frame[i]; // R成分
       vals.push(sum / (frame.length / 4));
 
       const t = (performance.now() - start) / 1000;
@@ -312,7 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(async () => {
           showScreen('camera');
           const fHud = document.getElementById('fvalue-display-camera');
-          if (fHud) fHud.textContent = `F: ${parseFloat(apertureInput.value).toFixed(1)}`;
+          if (fHud) fHud.textContent = `F: ${parseFloat(apertureInput?.value ?? selectedFValue).toFixed(1)}`;
           updateCameraHudBpm();
           await startCamera('environment');
         }, 800);
@@ -337,7 +365,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const shutterBtn = document.getElementById('camera-shutter-btn');
   const bpmHud = document.getElementById('bpm-display-camera');
 
-  // 実BPMをシャッタースピードに直に反映：SS(秒) = 60 / BPM（0.1〜2.0にクランプ）
   function exposureTimeSec() {
     const bpm = lastMeasuredBpm || defaultBpm;
     return Math.min(2.0, Math.max(0.1, 60 / bpm));
@@ -345,13 +372,12 @@ document.addEventListener('DOMContentLoaded', () => {
   function exposureLabel(sec) { return sec >= 1 ? `${sec.toFixed(1)}s` : `1/${Math.round(1/sec)}s`; }
   function updateCameraHudBpm() {
     const sec = exposureTimeSec();
-    bpmHud.textContent = `BPM: ${lastMeasuredBpm || '--'} / SS: ${exposureLabel(sec)}`;
+    if (bpmHud) bpmHud.textContent = `BPM: ${lastMeasuredBpm || '--'} / SS: ${exposureLabel(sec)}`;
   }
   updateCameraHudBpm();
 
   const sleep = ms => new Promise(res => setTimeout(res, ms));
 
-  // StackBlur の存在確認
   if (!window.StackBlur || !StackBlur.canvasRGBA) {
     console.warn('StackBlurが読み込まれていません（プレビュー/保存時のボケはスキップされます）');
   }
@@ -520,7 +546,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const url = btn.getAttribute('data-share');
       const name = btn.getAttribute('data-name') || 'photo.png';
       try {
-        // URL から blob を得る（ObjectURLでもOK）
         const blob = await fetch(url).then(r => r.blob());
         const file = new File([blob], name, { type: 'image/png' });
         if (navigator.canShare?.({ files: [file] })) {
@@ -535,6 +560,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     };
   }
+
+  // ====== カメラ切替（ボタン） ======
+  document.getElementById('camera-switch-btn')?.addEventListener('click', async () => {
+    const newMode = isFrontCamera ? 'environment' : 'user';
+    await startCamera(newMode);
+  });
 
   // ====== 初期表示 ======
   showScreen('initial');
