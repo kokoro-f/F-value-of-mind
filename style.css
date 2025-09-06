@@ -218,3 +218,122 @@ button:focus-visible { outline: 3px solid #5aa9ff; outline-offset: 2px; }
   background: #2eaadc;
   color: #fff;
 }
+
+/* =========================================================
+   F値決定画面だけUI変更（他画面へは影響しない）
+   ========================================================= */
+#screen-fvalue-input {
+  /* 画面全体のレイアウト */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;      /* 上寄せ */
+  background: #ffffff;
+  color: #111;
+  text-align: center;
+  padding: 64px 20px 72px;          /* 上に余白、下はバブル分 + 決定ボタン分 */
+  position: relative;
+  overflow: hidden;
+
+  /* この画面内だけで使うCSS変数（JSで更新可） */
+  --f-green: #2e9b57;               /* 緑の基調色 */
+  --circle-scale: 0.58;             /* 初期：F=32 相当。JSで上書き */
+  --circle-min-scale: 0.55;         /* 見た目の最小スケール参考値 */
+  --circle-max-scale: 0.95;         /* 見た目の最大スケール参考値 */
+}
+
+/* 日本語寄りフォントはこの画面のみ */
+#screen-fvalue-input h1,
+#screen-fvalue-input h2,
+#screen-fvalue-input p,
+#screen-fvalue-input button,
+#screen-fvalue-input .aperture-value {
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP",
+               system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* タイトル/本文（参考画像トーン） */
+#screen-fvalue-input h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+  margin: 0 0 12px;
+  color: #111;
+}
+#screen-fvalue-input p {
+  font-size: .95rem;
+  line-height: 1.65;
+  color: #333;
+}
+
+/* 背景のバブル（DOM追加なし。擬似要素で上下に描画） */
+#screen-fvalue-input::before,
+#screen-fvalue-input::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0;
+  height: 60px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle 10px at 10px 10px, var(--f-green) 98%, transparent) 0 0/28px 28px repeat-x,
+    radial-gradient(circle 10px at 10px 10px, var(--f-green) 98%, transparent) 14px 16px/28px 28px repeat-x;
+  opacity: .95;
+}
+#screen-fvalue-input::before { top: 0; }
+#screen-fvalue-input::after  { bottom: 0; transform: scaleY(-1); }
+
+/* 中央の円：緑の円のみ（既存の枠/影をこの画面だけ無効化） */
+#screen-fvalue-input .aperture-control {
+  width: min(65vw, 260px);
+  height: min(65vw, 260px);
+  margin: 18px auto;
+  position: relative;
+}
+#screen-fvalue-input .aperture-ring {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--f-green) !important;
+  border: none !important;
+  box-shadow: 0 6px 16px rgba(0,0,0,.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: scale(var(--circle-scale));
+  transform-origin: 50% 50%;
+  transition: transform .08s linear;  /* ピンチに追従して滑らか */
+  will-change: transform;
+}
+
+/* F値の数値表示（白文字） */
+#screen-fvalue-input .aperture-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  pointer-events: none;
+}
+
+/* 補足テキスト（画像の雰囲気に合わせて控えめ） */
+#screen-fvalue-input .f-help {
+  font-size: .85rem;
+  color: #444;
+  margin-top: 8px;
+}
+
+/* 決定ボタン：黒いPill（この画面のみ） */
+#screen-fvalue-input .primary-cta,
+#screen-fvalue-input button.primary-cta {
+  margin-top: 14px;
+  background: #111 !important;
+  color: #fff !important;
+  border-radius: 999px;
+  padding: 10px 26px;
+  font-size: 1rem;
+  font-weight: 700;
+  box-shadow: 0 4px 10px rgba(0,0,0,.2);
+}
+
+/* 端末の下部ジェスチャーエリアを少し避ける（ある場合） */
+@supports (padding: max(0px)) {
+  #screen-fvalue-input { padding-bottom: max(72px, env(safe-area-inset-bottom)); }
+}
