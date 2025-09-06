@@ -166,10 +166,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('intro-next-btn')?.addEventListener('click', () => showScreen('fvalue'));
 
   // ====== F値（ピンチ・スケール制御） ======
-  const fvalueScreen   = document.getElementById('screen-fvalue-input');
-  const apertureControl= document.querySelector('#screen-fvalue-input .aperture-control');
-  const fValueDisplay  = document.getElementById('f-value-display'); // ※画面内のF値表示要素（例：.aperture-value）
-  const apertureInput  = document.getElementById('aperture');        // hidden/numberでもOK
+  const fvalueScreen    = document.getElementById('screen-fvalue-input');
+  const apertureControl = document.querySelector('#screen-fvalue-input .aperture-control');
+  const fValueLabel =
+    document.getElementById('f-value-display') ||
+    document.querySelector('#screen-fvalue-input .aperture-value'); // フォールバック
+  const apertureInput   = document.getElementById('aperture'); // hidden/numberでもOK
+
+  // 念のため：iOSでピンチmoveを通す
+  if (apertureControl) apertureControl.style.touchAction = 'none';
 
   const MIN_F = 1.2, MAX_F = 32.0;
   const SCALE_MIN = 0.55, SCALE_MAX = 0.95; // CSSと合わせる
@@ -192,12 +197,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const f = rawToF(raw);
     const scale = rawToScale(raw);
     fvalueScreen?.style.setProperty('--circle-scale', scale.toFixed(4));
-    const labelEl = fValueDisplay || document.querySelector('#screen-fvalue-input .aperture-value');
-    if (labelEl) labelEl.textContent = `F: ${f.toFixed(1)}`;
+    if (fValueLabel) fValueLabel.textContent = `F: ${f.toFixed(1)}`;
     if (apertureInput) apertureInput.value = f.toFixed(1);
   }
 
-  // 初期値反映
+  // 初期値をUIへ
   let raw = fToRaw(selectedFValue);
   renderFUiFromRaw(raw);
 
@@ -206,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let pinchStartRaw  = null;
   const getDistance = (t1, t2) => Math.hypot(t1.pageX - t2.pageX, t1.pageY - t2.pageY);
 
-  document.body.addEventListener('touchstart', e => {
+  apertureControl?.addEventListener('touchstart', (e) => {
     if (!screens.fvalue?.classList.contains('active')) return;
     if (e.touches.length === 2) {
       e.preventDefault();
@@ -215,20 +219,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, { passive: false });
 
-  document.body.addEventListener('touchmove', e => {
+  apertureControl?.addEventListener('touchmove', (e) => {
     if (!screens.fvalue?.classList.contains('active')) return;
     if (e.touches.length === 2 && pinchStartDist) {
       e.preventDefault();
       const current = getDistance(e.touches[0], e.touches[1]);
       const factor = current / pinchStartDist;
-      let nextRaw = pinchStartRaw * factor;
-      nextRaw = Math.max(0, Math.min(1, nextRaw));
-      raw = nextRaw;
+      let nextRaw = pinchStartRaw * factor; // 乗算で気持ちよく
+      raw = Math.max(0, Math.min(1, nextRaw));
       renderFUiFromRaw(raw);
     }
   }, { passive: false });
 
-  document.body.addEventListener('touchend', () => {
+  apertureControl?.addEventListener('touchend', () => {
     pinchStartDist = null;
     pinchStartRaw  = null;
   });
@@ -242,11 +245,12 @@ document.addEventListener('DOMContentLoaded', () => {
     renderFUiFromRaw(raw);
   }, { passive: false });
 
-  // F値決定 → BPM計測へ
+  // F値決定 → BPMへ
   document.getElementById('f-value-decide-btn')?.addEventListener('click', async () => {
     const f = parseFloat(apertureInput?.value ?? `${selectedFValue}`);
     selectedFValue = isFinite(f) ? f : selectedFValue;
-    document.querySelector('#screen-fvalue-input .aperture-control')?.setAttribute('aria-valuenow', selectedFValue.toFixed(1));
+    document.querySelector('#screen-fvalue-input .aperture-control')
+      ?.setAttribute('aria-valuenow', selectedFValue.toFixed(1));
     showScreen('bpm');
     await startBpmCamera();
   });
