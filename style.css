@@ -219,121 +219,80 @@ button:focus-visible { outline: 3px solid #5aa9ff; outline-offset: 2px; }
   color: #fff;
 }
 
-/* =========================================================
-   F値決定画面だけUI変更（他画面へは影響しない）
-   ========================================================= */
-#screen-fvalue-input {
-  /* 画面全体のレイアウト */
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;      /* 上寄せ */
-  background: #ffffff;
-  color: #111;
-  text-align: center;
-  padding: 64px 20px 72px;          /* 上に余白、下はバブル分 + 決定ボタン分 */
+/* =========================================
+   F値決定画面：水玉を固定 & 円デザインを二重構造に
+   ========================================= */
+#screen-fvalue-input{
+  /* 画面内だけの変数（JSで --circle-scale を更新） */
+  --f-green: #2e9b57;
+  --circle-scale: 0.58;   /* F=32 初期例。JSで 0.55〜0.95 くらいに更新 */
   position: relative;
   overflow: hidden;
-
-  /* この画面内だけで使うCSS変数（JSで更新可） */
-  --f-green: #2e9b57;               /* 緑の基調色 */
-  --circle-scale: 0.58;             /* 初期：F=32 相当。JSで上書き */
-  --circle-min-scale: 0.55;         /* 見た目の最小スケール参考値 */
-  --circle-max-scale: 0.95;         /* 見た目の最大スケール参考値 */
 }
 
-/* 日本語寄りフォントはこの画面のみ */
-#screen-fvalue-input h1,
-#screen-fvalue-input h2,
-#screen-fvalue-input p,
-#screen-fvalue-input button,
-#screen-fvalue-input .aperture-value {
-  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP",
-               system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-}
+/* 既存の .bubble-band がDOMにあっても動かないように隠す（この画面だけ） */
+#screen-fvalue-input .bubble-band{ display:none !important; }
 
-/* タイトル/本文（参考画像トーン） */
-#screen-fvalue-input h2 {
-  font-size: 1.4rem;
-  font-weight: 700;
-  letter-spacing: .05em;
-  margin: 0 0 12px;
-  color: #111;
-}
-#screen-fvalue-input p {
-  font-size: .95rem;
-  line-height: 1.65;
-  color: #333;
-}
-
-/* 背景のバブル（DOM追加なし。擬似要素で上下に描画） */
+/* 上下の水玉は画面の擬似要素で固定表示（円のスケールの影響を受けない） */
 #screen-fvalue-input::before,
-#screen-fvalue-input::after {
-  content: "";
-  position: absolute;
-  left: 0; right: 0;
-  height: 60px;
-  pointer-events: none;
+#screen-fvalue-input::after{
+  content:"";
+  position:absolute; left:0; right:0; height:60px;
   background:
     radial-gradient(circle 10px at 10px 10px, var(--f-green) 98%, transparent) 0 0/28px 28px repeat-x,
     radial-gradient(circle 10px at 10px 10px, var(--f-green) 98%, transparent) 14px 16px/28px 28px repeat-x;
-  opacity: .95;
+  opacity:.95;
+  pointer-events:none;
+  z-index: 1;  /* 円より背面に置きたいなら 0 に、前面なら 1 のまま */
 }
-#screen-fvalue-input::before { top: 0; }
-#screen-fvalue-input::after  { bottom: 0; transform: scaleY(-1); }
+#screen-fvalue-input::before{ top:0; }
+#screen-fvalue-input::after { bottom:0; transform: scaleY(-1); }
 
-/* 中央の円：緑の円のみ（既存の枠/影をこの画面だけ無効化） */
-#screen-fvalue-input .aperture-control {
+/* 円コンテナは前面に */
+#screen-fvalue-input .aperture-control{
   width: min(65vw, 260px);
   height: min(65vw, 260px);
   margin: 18px auto;
   position: relative;
+  z-index: 2;
 }
-#screen-fvalue-input .aperture-ring {
+
+/* ===== 円の二重構造 =====
+   外側：細い輪（一定太さ）
+   内側：塗りつぶし円（ここだけ scale で拡縮）
+*/
+#screen-fvalue-input .aperture-ring{
+  position: relative;
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: var(--f-green) !important;
-  border: none !important;
+  background: transparent !important;         /* 既存のグレー背景を無効化 */
+  border: 3px solid var(--f-green) !important;/* 細い緑の輪（一定太さ） */
   box-shadow: 0 6px 16px rgba(0,0,0,.18);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transform: scale(var(--circle-scale));
+  display: flex; align-items: center; justify-content: center;
+  /* 外輪はスケールしない（線幅を一定に保つ） */
+  transform: none !important;
+}
+
+/* 内側の塗りつぶし緑円（スケール対象） */
+#screen-fvalue-input .aperture-ring::after{
+  content:"";
+  position: absolute;
+  inset: 10%;                         /* 外輪との隙間（好みで調整） */
+  border-radius: 50%;
+  background: var(--f-green);
   transform-origin: 50% 50%;
-  transition: transform .08s linear;  /* ピンチに追従して滑らか */
+  transform: scale(var(--circle-scale));
+  transition: transform .08s linear;  /* ピンチで滑らか */
   will-change: transform;
 }
 
-/* F値の数値表示（白文字） */
-#screen-fvalue-input .aperture-value {
+/* F値ラベル（最前面・中央） */
+#screen-fvalue-input .aperture-value{
+  position: relative;
+  z-index: 1;        /* 内側円より前に */
   font-size: 1.5rem;
   font-weight: 700;
   color: #fff;
   pointer-events: none;
-}
-
-/* 補足テキスト（画像の雰囲気に合わせて控えめ） */
-#screen-fvalue-input .f-help {
-  font-size: .85rem;
-  color: #444;
-  margin-top: 8px;
-}
-
-/* 決定ボタン：黒いPill（この画面のみ） */
-#screen-fvalue-input .primary-cta,
-#screen-fvalue-input button.primary-cta {
-  margin-top: 14px;
-  background: #111 !important;
-  color: #fff !important;
-  border-radius: 999px;
-  padding: 10px 26px;
-  font-size: 1rem;
-  font-weight: 700;
-  box-shadow: 0 4px 10px rgba(0,0,0,.2);
-}
-
-/* 端末の下部ジェスチャーエリアを少し避ける（ある場合） */
-@supports (padding: max(0px)) {
-  #screen-fvalue-input { padding-bottom: max(72px, env(safe-area-inset-bottom)); }
 }
